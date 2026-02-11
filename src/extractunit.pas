@@ -96,6 +96,27 @@ begin
 end;
 
 function ReadProp(constref Archive: IInArchive; Index: UInt32;
+                  PropID: UInt32; out AValue: TFileTime): Boolean;
+var
+  Value: TPropVariant;
+begin
+  Value:= Default(TPropVariant);
+  SevenZipCheck(Archive.GetProperty(Index, PropID, Value));
+  case Value.vt of
+    VT_EMPTY, VT_NULL:
+      Result:= False;
+    VT_FILETIME:
+      begin
+        Result:= True;
+        AValue:= Value.filetime;
+      end;
+    else begin
+      Result:= False;
+    end;
+  end;
+end;
+
+function ReadProp(constref Archive: IInArchive; Index: UInt32;
                   PropID: UInt32; out AValue: WideString): Boolean;
 var
   PropSize: UInt32;
@@ -258,10 +279,13 @@ end;
 function TArchiveExtractCallback.GetStream(Index: UInt32; out
   OutStream: ISequentialOutStream; AskExtractMode: Int32): HResult; winapi;
 var
+  FileTime: TFileTime;
   IsDirectory: Boolean;
   PackedName: WideString;
+  FindData: TWin32FileAttributeData;
 begin
   Result:= S_OK;
+  OutStream:= nil;
 
   if not ReadProp(FArchive, Index, kpidPath, PackedName) then
     Exit(E_FAIL);
@@ -272,13 +296,20 @@ begin
   // Directory
   if (IsDirectory) then
   begin
-    OutStream:= nil;
-
     if not ForceDirectories(FTargetDirectory + PackedName) then
     begin
       Result:= E_FAIL;
     end;
     Exit;
+  end;
+
+  if ReadProp(FArchive, Index, kpidMTime, FileTime) then
+  begin
+    if GetFileAttributesExW(PWideChar(FTargetDirectory + PackedName), GetFileExInfoStandard, @FindData) then
+    begin
+      // Skip files with the same or earlier time
+      if UInt64(FileTime) <= UInt64(FindData.ftLastWriteTime) then Exit;
+    end;
   end;
 
   // File

@@ -32,6 +32,7 @@ type
 const
   kpidPath = 3;
   kpidIsDir = 6;
+  kpidMTime = 12;
 
 // IProgress.h
 type
