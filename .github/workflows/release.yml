@@ -1,0 +1,33 @@
+name: build-release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [prereleased, released]
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+    - name: Install Lazarus
+      uses: doublecmd/lazarus-install@win
+      with:
+        lazarus-version: "stable"
+
+    - name: Checkout source
+      uses: actions/checkout@v6
+
+    - name: Build packages
+      run: ./.github/scripts/create_release.bat
+
+    - name: Upload binaries to release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        file: updater-release/updater*.zip
+        tag: ${{ github.ref }}
+        overwrite: true
+        file_glob: true
