@@ -1,0 +1,99 @@
+object MainForm: TMainForm
+  Left = 529
+  Height = 420
+  Top = 205
+  Width = 430
+  AutoSize = True
+  Caption = 'Status...'
+  ChildSizing.LeftRightSpacing = 12
+  ChildSizing.TopBottomSpacing = 12
+  ClientHeight = 420
+  ClientWidth = 430
+  Constraints.MinHeight = 420
+  Constraints.MinWidth = 430
+  Position = poDesktopCenter
+  LCLVersion = '4.4.0.0'
+  OnCreate = FormCreate
+  object pnlStatus: TPanel
+    AnchorSideLeft.Control = Owner
+    AnchorSideTop.Control = Owner
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    Left = 12
+    Height = 69
+    Top = 12
+    Width = 406
+    Anchors = [akTop, akLeft, akRight]
+    AutoSize = True
+    BevelOuter = bvNone
+    ChildSizing.HorizontalSpacing = 12
+    ChildSizing.VerticalSpacing = 12
+    ChildSizing.Layout = cclLeftToRightThenTopToBottom
+    ChildSizing.ControlsPerLine = 2
+    ClientHeight = 69
+    ClientWidth = 406
+    TabOrder = 0
+    object lblOperation: TLabel
+      Left = 0
+      Height = 15
+      Top = 0
+      Width = 71
+      Caption = 'Downloading'
+    end
+    object lblOperationValue: TLabel
+      Left = 83
+      Height = 15
+      Top = 0
+      Width = 1
+    end
+    object lblComplete: TLabel
+      Left = 0
+      Height = 15
+      Top = 27
+      Width = 71
+      Caption = 'Complete'
+    end
+    object lblCompleteValue: TLabel
+      Left = 83
+      Height = 15
+      Top = 27
+      Width = 1
+    end
+    object lblChangeLog: TLabel
+      Left = 0
+      Height = 15
+      Top = 54
+      Width = 71
+      Caption = 'Changelog'
+    end
+  end
+  object memChangeLog: TMemo
+    AnchorSideLeft.Control = Owner
+    AnchorSideTop.Control = pnlStatus
+    AnchorSideTop.Side = asrBottom
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    Left = 12
+    Height = 270
+    Top = 93
+    Width = 406
+    Anchors = [akTop, akLeft, akRight]
+    BorderSpacing.Top = 12
+    ReadOnly = True
+    TabOrder = 1
+  end
+  object btnCancel: TButton
+    AnchorSideLeft.Control = Owner
+    AnchorSideLeft.Side = asrCenter
+    AnchorSideTop.Control = memChangeLog
+    AnchorSideTop.Side = asrBottom
+    Left = 178
+    Height = 25
+    Top = 375
+    Width = 75
+    BorderSpacing.Top = 12
+    Caption = 'Cancel'
+    TabOrder = 2
+    OnClick = btnCancelClick
+  end
+end
