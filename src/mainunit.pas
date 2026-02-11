@@ -94,6 +94,7 @@ resourcestring
   rsNewSnapshot = 'New snapshot %s is available!';
   rsUpdateQuery = 'Do you want to update?';
   rsExtractLabel = 'Extracting';
+  rsClose = 'Close';
 
 function TMainForm.CheckUpdate: Boolean;
 var
@@ -149,8 +150,12 @@ end;
 
 procedure TMainForm.btnCancelClick(Sender: TObject);
 begin
-  Cancel:= True;
-  btnCancel.Enabled:= False;
+  if (btnCancel.Tag > 0) then
+    Application.Terminate
+  else begin
+    Cancel:= True;
+    btnCancel.Enabled:= False;
+  end;
 end;
 
 function TMainForm.UpdateState(AProgress: Integer): Boolean;
@@ -213,7 +218,8 @@ begin
   if Data = 0 then
     Application.Terminate
   else begin
-
+    btnCancel.Tag:= Data;
+    btnCancel.Caption:= rsClose;
   end;
 end;
 
