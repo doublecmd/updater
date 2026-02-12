@@ -181,6 +181,18 @@ begin
   end;
 end;
 
+function PrepareTime(FileTime: TFileTime): TFileTime;
+const
+  ONE_SECOND = 10000000;
+var
+  AValue: UInt64;
+begin
+  // FAT32 and exFAT compatibility
+  AValue:= (UInt64(FileTime) div ONE_SECOND);
+  if Odd(AValue) then AValue:= AValue + 1;
+  Result:= TFileTime(AValue * ONE_SECOND);
+end;
+
 function StrEnds(const StringToCheck, StringToMatch: UnicodeString): Boolean;
 begin
   Result := (Length(StringToMatch) > 0) and
@@ -333,8 +345,11 @@ begin
 
   if ReadProp(FArchive, Index, kpidMTime, FCurrentItem.FileTime) then
   begin
+    FCurrentItem.FileTime:= PrepareTime(FCurrentItem.FileTime);
+
     if GetFileAttributesExW(PWideChar(FCurrentItem.PackedName), GetFileExInfoStandard, @FindData) then
     begin
+      FindData.ftLastWriteTime:= PrepareTime(FindData.ftLastWriteTime);
       // Skip files with the same or earlier time
       if UInt64(FCurrentItem.FileTime) <= UInt64(FindData.ftLastWriteTime) then Exit;
     end;
