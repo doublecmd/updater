@@ -9,6 +9,14 @@ uses
 
 type
 
+  { TArchiveItem }
+
+  TArchiveItem = record
+    Status: HResult;
+    FileTime: TFileTime;
+    PackedName: UnicodeString;
+  end;
+
   { TProgressEvent }
 
   TProgressEvent = function(Progress: Int32): Boolean of object;
@@ -31,7 +39,7 @@ type
   private
     FStream: THandleStream;
   public
-    constructor Create(const FileName: WideString);
+    constructor Create(const FileName: UnicodeString);
     destructor Destroy; override;
     function Write(Data: Pointer; Size: UInt32; ProcessedSize: PUInt32): HResult; winapi;
   end;
@@ -49,8 +57,11 @@ type
   private
     FTotal: UInt64;
     FArchive: IInArchive;
+    FSpecial: TDuplicates;
+    FCurrentItem: TArchiveItem;
+    FTargetPath: UnicodeString;
+    FLibraryName: UnicodeString;
     FOnProgress: TProgressEvent;
-    FTargetDirectory: WideString;
   public
     function SetTotal(Total: UInt64): HResult; winapi;
     function SetCompleted(CompleteValue: PUInt64): HResult; winapi;
@@ -117,7 +128,7 @@ begin
 end;
 
 function ReadProp(constref Archive: IInArchive; Index: UInt32;
-                  PropID: UInt32; out AValue: WideString): Boolean;
+                  PropID: UInt32; out AValue: UnicodeString): Boolean;
 var
   PropSize: UInt32;
   Value: TPropVariant;
@@ -130,12 +141,12 @@ begin
     VT_LPSTR:
       begin
         Result:= True;
-        AValue:= WideString(AnsiString(Value.pszVal));
+        AValue:= UnicodeString(AnsiString(Value.pszVal));
       end;
     VT_LPWSTR:
       begin
         Result:= True;
-        AValue:= WideString(PWideChar(Value.pwszVal));
+        AValue:= UnicodeString(PWideChar(Value.pwszVal));
       end;
     VT_BSTR:
       begin
@@ -151,11 +162,37 @@ begin
   end;
 end;
 
+function FileSetTime(const FileName: UnicodeString;
+                     ModificationTime: TFileTime): Boolean;
+var
+  Handle: System.THandle;
+begin
+  Handle:= CreateFileW(PWideChar(FileName),
+                       FILE_WRITE_ATTRIBUTES,
+                       FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+                       nil, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+
+  Result:= Handle <> INVALID_HANDLE_VALUE;
+
+  if Result then
+  begin
+    Result := Windows.SetFileTime(Handle, nil, nil, @ModificationTime);
+    CloseHandle(Handle);
+  end;
+end;
+
+function StrEnds(const StringToCheck, StringToMatch: UnicodeString): Boolean;
+begin
+  Result := (Length(StringToMatch) > 0) and
+            (Length(StringToCheck) >= Length(StringToMatch)) and
+            (CompareWord(StringToCheck[1 + Length(StringToCheck) - Length(StringToMatch)],
+                         StringToMatch[1], Length(StringToMatch)) = 0);
+end;
+
 procedure Extract(AStream: TStream; const TargetDirectory: String; OnProgress: TProgressEvent);
 var
   Res: HResult;
   InterfaceID: TGUID;
-  LibraryName: String;
   Archive: IInArchive;
   InStream: IInStream;
   MaxCheckStartPosition: Int64;
@@ -175,17 +212,7 @@ begin
 
   ExtractCallback:= TArchiveExtractCallback.Create(Archive, TargetDirectory, OnProgress);
 
-  LibraryName:= TargetDirectory + PathDelim + SevenZipLibraryName;
-
-  SysUtils.DeleteFile(LibraryName + '.old');
-  RenameFile(LibraryName, LibraryName + '.old');
-  try
-    SevenZipCheck(Archive.Extract(nil, $FFFFFFFF, 0, ExtractCallback));
-  except
-    SysUtils.DeleteFile(LibraryName);
-    RenameFile(LibraryName + '.old', LibraryName);
-    raise;
-  end;
+  SevenZipCheck(Archive.Extract(nil, $FFFFFFFF, 0, ExtractCallback));
 end;
 
 { TInStream }
@@ -219,7 +246,7 @@ end;
 
 { TSequentialOutStream }
 
-constructor TSequentialOutStream.Create(const FileName: WideString);
+constructor TSequentialOutStream.Create(const FileName: UnicodeString);
 begin
   FStream:= TFileStream.Create(UTF8Encode(FileName), fmCreate);
 end;
@@ -279,45 +306,55 @@ end;
 function TArchiveExtractCallback.GetStream(Index: UInt32; out
   OutStream: ISequentialOutStream; AskExtractMode: Int32): HResult; winapi;
 var
-  FileTime: TFileTime;
   IsDirectory: Boolean;
-  PackedName: WideString;
   FindData: TWin32FileAttributeData;
 begin
   Result:= S_OK;
   OutStream:= nil;
-
-  if not ReadProp(FArchive, Index, kpidPath, PackedName) then
-    Exit(E_FAIL);
+  FCurrentItem.Status:= S_FALSE;
 
   if not ReadProp(FArchive, Index, kpidIsDir, IsDirectory) then
     Exit(E_FAIL);
 
+  if not ReadProp(FArchive, Index, kpidPath, FCurrentItem.PackedName) then
+    Exit(E_FAIL);
+
+  FCurrentItem.PackedName:= FTargetPath + FCurrentItem.PackedName;
+
   // Directory
   if (IsDirectory) then
   begin
-    if not ForceDirectories(FTargetDirectory + PackedName) then
+    if not ForceDirectories(FCurrentItem.PackedName) then
     begin
       Result:= E_FAIL;
     end;
     Exit;
   end;
 
-  if ReadProp(FArchive, Index, kpidMTime, FileTime) then
+  if ReadProp(FArchive, Index, kpidMTime, FCurrentItem.FileTime) then
   begin
-    if GetFileAttributesExW(PWideChar(FTargetDirectory + PackedName), GetFileExInfoStandard, @FindData) then
+    if GetFileAttributesExW(PWideChar(FCurrentItem.PackedName), GetFileExInfoStandard, @FindData) then
     begin
       // Skip files with the same or earlier time
-      if UInt64(FileTime) <= UInt64(FindData.ftLastWriteTime) then Exit;
+      if UInt64(FCurrentItem.FileTime) <= UInt64(FindData.ftLastWriteTime) then Exit;
     end;
+  end;
+
+  // Special case: 7-Zip library
+  if (FSpecial = dupIgnore) and StrEnds(FCurrentItem.PackedName, SevenZipLibraryName) then
+  begin
+    FSpecial:= dupAccept;
+    RenameFile(FLibraryName, FLibraryName + '.old');
   end;
 
   // File
   try
-    OutStream:= TSequentialOutStream.Create(FTargetDirectory + PackedName);
+    OutStream:= TSequentialOutStream.Create(FCurrentItem.PackedName);
   except
     Result:= E_FAIL;
   end;
+
+  FCurrentItem.Status:= Result;
 end;
 
 function TArchiveExtractCallback.PrepareOperation(AskExtractMode: Int32): HResult; winapi;
@@ -327,6 +364,20 @@ end;
 
 function TArchiveExtractCallback.SetOperationResult(OpRes: Int32): HResult; winapi;
 begin
+  if (FSpecial = dupAccept) then
+  begin
+    // Restore original version
+    if (OpRes <> kOK) then
+    begin
+      SysUtils.DeleteFile(FLibraryName);
+      RenameFile(FLibraryName + '.old', FLibraryName);
+    end;
+    FSpecial:= dupError;
+  end;
+  if (OpRes = kOK) and (FCurrentItem.Status = S_OK) then
+  begin
+    FileSetTime(FCurrentItem.PackedName, FCurrentItem.FileTime);
+  end;
   Result:= S_OK;
 end;
 
@@ -336,7 +387,9 @@ begin
   inherited Create;
   FArchive:= Archive;
   FOnProgress:= OnProgress;
-  FTargetDirectory:= IncludeTrailingBackslash(UTF8Decode(TargetDirectory));
+  FTargetPath:= IncludeTrailingBackslash(UTF8Decode(TargetDirectory));
+  FLibraryName:= FTargetPath + SevenZipLibraryName;
+  SysUtils.DeleteFile(FLibraryName + '.old');
 end;
 
 end.

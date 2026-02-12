@@ -117,10 +117,14 @@ end;
 procedure TMainForm.ExecuteCommander;
 var
   Index: Integer;
+  FileName: String;
 begin
+  FileName:= ExtractFileName(ParamStr(0));
+  FileName:= StringReplace(FileName, 'updater', 'doublecmd', []);
+
   with TProcess.Create(Self) do
   begin
-    Executable:= StringReplace(ParamStr(0), 'updater', 'doublecmd', []);
+    Executable:= ExtractFilePath(ParamStr(0)) + FileName;
 
     for Index:= 1 to ParamCount do
     begin

@@ -51,9 +51,6 @@ const
 
   // Operation result
   kOK = 0;
-  kUnSupportedMethod = 1;
-  kDataError = 2;
-  kCRCError = 3;
 
 type
   IArchiveOpenCallback = interface(IUnknown)
