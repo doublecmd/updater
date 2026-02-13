@@ -14,6 +14,7 @@ object MainForm: TMainForm
   Position = poDesktopCenter
   LCLVersion = '4.4.0.0'
   OnCreate = FormCreate
+  OnDestroy = FormDestroy
   object pnlStatus: TPanel
     AnchorSideLeft.Control = Owner
     AnchorSideTop.Control = Owner

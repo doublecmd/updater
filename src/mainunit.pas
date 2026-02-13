@@ -54,6 +54,7 @@ type
     pnlStatus: TPanel;
     procedure btnCancelClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
   private
     Date: String;
     Value: String;
@@ -65,13 +66,12 @@ type
     procedure UpdateCaption(Data: PtrInt);
     procedure UpdateProgress(Data: PtrInt);
     procedure UpdateChangelog(Data: PtrInt);
-    procedure ApplicationTerminate(Data: PtrInt);
     function UpdateState(AProgress: Integer): Boolean;
   protected
     FVersion: String;
     FDateOld: String;
-    FConfig: TIniFile;
     FConfirm: Boolean;
+    FConfig: TMemIniFile;
     FOncePerDay: Boolean;
     FRevisionOld: String;
     procedure ExecuteCommander;
@@ -105,6 +105,11 @@ begin
 
   if FOncePerDay and (FDateOld = Date) then Exit;
   Revision:= ExtractFileName(WebGetData(REVISION_URL));
+
+  if FOncePerDay and (Length(Revision) > 0) then
+  begin
+    FConfig.WriteString('General', 'Date', Date);
+  end;
 
   if (Length(Revision) > 0) and (Revision <> FRevisionOld) then
   begin
@@ -150,6 +155,11 @@ begin
     TThread.ExecuteInThread(@ExecuteHandler);
     Visible:= True;
   end;
+end;
+
+procedure TMainForm.FormDestroy(Sender: TObject);
+begin
+  FConfig.Free;
 end;
 
 procedure TMainForm.btnCancelClick(Sender: TObject);
@@ -244,15 +254,10 @@ begin
   memChangeLog.Text:= Changelog;
 end;
 
-procedure TMainForm.ApplicationTerminate(Data: PtrInt);
-begin
-  Application.Terminate;
-end;
-
 procedure TMainForm.LoadConfiguration;
 begin
   try
-    FConfig:= TIniFile.Create('updater.ini');
+    FConfig:= TMemIniFile.Create('updater.ini');
     FConfirm:= FConfig.ReadBool('General', 'Confirm', True);
     FDateOld:= FConfig.ReadString('General', 'Date', EmptyStr);
     FVersion:= FConfig.ReadString('General', 'Version', VERSION);
@@ -265,7 +270,6 @@ end;
 
 procedure TMainForm.SaveConfiguration;
 begin
-  FConfig.WriteString('General', 'Date', Date);
   FConfig.WriteBool('General', 'Confirm', FConfirm);
   FConfig.WriteString('General', 'Version', FVersion);
   FConfig.WriteString('General', 'Revision', Revision);
